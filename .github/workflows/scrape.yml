@@ -75,5 +75,5 @@ jobs:
             echo "No data changes to commit."
           else
             git commit -m "Update prices $(date -u +%F)"
-            git push
+            git pull --rebase origin main && git push
           fi
