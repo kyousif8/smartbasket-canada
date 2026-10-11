@@ -310,6 +310,7 @@ def allowed_by_robots(url):
 BLOCK_MARKERS = (
     "access denied", "unusual traffic", "captcha", "verify you are human",
     "robot or human", "are you a robot", "request blocked", "pardon our interruption",
+    "press & hold", "press and hold", "activate and hold", "verify your identity",
 )
 
 

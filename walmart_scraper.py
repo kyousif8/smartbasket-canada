@@ -74,31 +74,38 @@ def scrape_category(page, label, path):
     url = BASE + path
     if not allowed_by_robots(url):
         print(f"  [robots] skipping disallowed URL {url}")
-        return [], False
+        return [], False, ""
     page.goto(url, wait_until="domcontentloaded", timeout=45000)
     try:
         page.wait_for_selector('a[href*="/ip/"]', timeout=15000)
     except Exception:
         pass
-    if looks_blocked(page.inner_text("body")):
-        return [], True
+    body = page.inner_text("body")
+    if looks_blocked(body):
+        return [], True, "bot-check page"
     products = []
-    for r in page.evaluate(EXTRACT_JS):
+    rows = page.evaluate(EXTRACT_JS)
+    for r in rows:
         rec = parse_generic_tile(r["tileText"], r["href"], STORE, BASE,
                                  name_hint=r["name"], category=label)
         if rec:
             products.append(rec)
-    return products, False
+    diag = ""
+    if not products:  # record what the page actually was, to diagnose later
+        snippet = " ".join(body.split())[:200]
+        diag = f"0 products ({len(rows)} product links); title={page.title()!r}; body starts: {snippet!r}"
+    return products, False, diag
 
 
 def main():
     all_products, errors, blocked_flag = [], [], False
+    empty_streak = 0
     with sync_playwright() as p:
         browser, context = launch_context(p, "STORAGE_STATE_WALMART")
         page = context.new_page()
         for label, path in CATEGORIES.items():
             try:
-                products, blocked = scrape_category(page, label, path)
+                products, blocked, diag = scrape_category(page, label, path)
             except Exception as e:
                 errors.append(f"{label}: {e}")
                 print(f"  !! {label}: {e}")
@@ -109,6 +116,17 @@ def main():
                 print("  Walmart served a bot-check page; stopping")
                 break
             print(f"  {label}: {len(products)} products")
+            if diag:
+                print(f"     {diag}")
+                errors.append(f"{label}: {diag}")
+            empty_streak = 0 if products else empty_streak + 1
+            if empty_streak >= 3:
+                # Three category pages in a row with nothing to read: most likely the
+                # site is not serving product tiles to this runner. Stop, don't evade.
+                blocked_flag = True
+                errors.append("no products rendered 3 times in a row; stopped")
+                print("  no products rendered 3 times in a row; stopping")
+                break
             all_products.extend(products)
             save_json(OUTPUT_FILE, all_products)
             polite_sleep()

@@ -106,6 +106,29 @@ async function test(name, fn) {
     assert.strictEqual(Object.keys(best).length, 4);
   });
 
+  await test('single-word searches skip look-alike products (butter != peanut butter / plant butter)', async () => {
+    const d = [P('no_frills', 'Kraft Smooth Peanut Butter 2 kg', 14.99, 0.75, '100g'),
+               P('no_frills', 'Becel Salted Plant Butter 454 g', 3.99, 0.88, '100g'),
+               P('no_frills', 'Lactantia Salted Butter 454 g', 7.99, 1.76, '100g'),
+               P('metro', 'Salted Butter 454 g', 6.99, 1.54, '100g')];
+    const { ctx } = await boot(serve(d));
+    const names = ctx.searchProducts('butter').map(p => p.name);
+    assert.deepStrictEqual(names.sort(), ['Lactantia Salted Butter 454 g', 'Salted Butter 454 g']);
+    assert.strictEqual(ctx.cheapestPerStore('butter').no_frills.name, 'Lactantia Salted Butter 454 g');
+  });
+
+  await test('explicit -exclusions and multi-word terms work; matches start at a word boundary', async () => {
+    const d = [P('no_frills', 'Kraft Smooth Peanut Butter 2 kg', 14.99, 0.75, '100g'),
+               P('no_frills', 'Lactantia Salted Butter 454 g', 7.99, 1.76, '100g'),
+               P('no_frills', 'Black Licorice 200 g', 2, 1, '100g'),
+               P('no_frills', 'Basmati Rice 2 kg', 9, 0.45, '100g')];
+    const { ctx } = await boot(serve(d));
+    assert.strictEqual(ctx.searchProducts('peanut butter').length, 1);
+    assert.strictEqual(ctx.searchProducts('butter -peanut').length, 1);
+    assert.strictEqual(ctx.searchProducts('salted butter').length, 1);
+    assert.deepStrictEqual(ctx.searchProducts('rice').map(p => p.name), ['Basmati Rice 2 kg']);
+  });
+
   await test('no match anywhere -> empty result, no throw', async () => {
     const { ctx } = await boot(serve(dataset()));
     assert.strictEqual(Object.keys(ctx.cheapestPerStore('caviar')).length, 0);

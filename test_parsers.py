@@ -119,6 +119,24 @@ class WalmartTiles(unittest.TestCase):
                                "/en/ip/y/4", "walmart_canada", WM)
         self.assertEqual(r["name"], "Oikos Greek Yogurt")
 
+    def test_real_walmart_innertext_samples(self):
+        # Captured from a live walmart.ca category page (tile innerText)
+        r = parse_generic_tile(
+            "Astro Original Balkan Style Plain Yogurt 6%, 750g\nBest seller\nAdd\n$3.67\n"
+            "current price $3.67\n49\u00a2/100g\nAstro Original Balkan Style Plain Yogurt 6%, 750g",
+            "/en/ip/astro/1", "walmart_canada", WM,
+            name_hint="Astro Original Balkan Style Plain Yogurt 6%, 750g")
+        self.assertEqual(r["price_cad"], 3.67)
+        self.assertEqual((r["unit_price"], r["unit_basis"]), (0.49, "100g"))
+        calc, _ = common.compute_unit_price(3.67, r["name"])
+        self.assertAlmostEqual(calc, 0.49, places=2)
+        r2 = parse_generic_tile(
+            "Armstrong Medium Cheddar Cheese Slices\nAdd\n$6.27\ncurrent price $6.27\n"
+            "Armstrong Medium Cheddar Cheese Slices\n27\n4.8 out of 5 stars. 27 reviews",
+            "/en/ip/arm/2", "walmart_canada", WM)
+        self.assertEqual(r2["name"], "Armstrong Medium Cheddar Cheese Slices")
+        self.assertEqual(r2["price_cad"], 6.27)
+
 
 class UnitMath(unittest.TestCase):
     def test_conversions(self):

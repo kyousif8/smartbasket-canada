@@ -122,10 +122,41 @@ function storeLabel(key) {
 }
 function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : '#'; }
 
+// Words that usually mean "a different product" for a common single-word search.
+const AUTO_EXCLUDE = {
+  butter: ['peanut', 'almond', 'cashew', 'nut', 'apple butter', 'cookie', 'popcorn', 'plant', 'butterscotch', 'buttermilk'],
+  milk: ['chocolate', 'milkshake', 'buttermilk', 'coconut milk', 'condensed'],
+  rice: ['cake', 'krispies', 'vinegar', 'cracker', 'noodle', 'pudding'],
+  bread: ['crumb', 'pudding'],
+  cream: ['ice cream', 'cream cheese', 'sour cream', 'creamer', 'cream of', 'cookie'],
+  coffee: ['creamer', 'mate'],
+  cheese: ['cheesecake', 'sauce', 'cracker', 'puff', 'noodle', 'pizza'],
+  chicken: ['broth', 'stock', 'soup', 'flavour', 'flavor', 'noodle'],
+  eggs: ['plant', 'chocolate', 'noodle'],
+  yogurt: ['coated', 'covered']
+};
+
+// "salted butter -plant": every plain word must start a word in the product name;
+// words starting with "-" must NOT appear. Single-word terms also get AUTO_EXCLUDE.
+function parseTerm(term) {
+  const raw = String(term || '').trim().toLowerCase();
+  const words = raw.split(/\s+/).filter(Boolean);
+  const inc = words.filter(w => w[0] !== '-' && w.length > 0);
+  const exc = words.filter(w => w[0] === '-' && w.length > 1).map(w => w.slice(1));
+  if (inc.length === 1 && exc.length === 0 && AUTO_EXCLUDE[inc[0]]) exc.push(...AUTO_EXCLUDE[inc[0]]);
+  return { inc, exc };
+}
+function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
 function searchProducts(term) {
-  const t = String(term || '').trim().toLowerCase();
-  if (!t) return [];
-  return DATASET.filter(p => String(p.name).toLowerCase().includes(t));
+  const { inc, exc } = parseTerm(term);
+  if (!inc.length) return [];
+  const incRe = inc.map(w => new RegExp('(^|[^a-z0-9])' + escRe(w), 'i'));
+  return DATASET.filter(p => {
+    const name = String(p.name).toLowerCase();
+    if (!incRe.every(r => r.test(name))) return false;
+    return !exc.some(x => name.includes(x));
+  });
 }
 
 // Cheapest match per store. Ranks by unit price when the matches share a unit basis
