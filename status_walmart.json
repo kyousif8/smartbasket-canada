@@ -1,9 +1,11 @@
 {
   "scraper": "walmart",
-  "finished_at": "2026-10-11T11:30:00.890170+00:00",
+  "finished_at": "2026-10-11T23:19:31.398620+00:00",
   "products": 0,
   "per_store": {},
-  "blocked": false,
-  "errors": [],
+  "blocked": true,
+  "errors": [
+    "bot-check page; stopped"
+  ],
   "note": ""
 }
