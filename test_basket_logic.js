@@ -153,6 +153,18 @@ async function test(name, fn) {
     assert.strictEqual(ctx.sizeOf('Mystery Item'), null);
   });
 
+  await test('whole-word matching: "butter" skips margarine/"Buttery", "chicken breast" skips deli meat', async () => {
+    const d = [P('no_frills', 'Becel Buttery Taste Margarine 637 g', 6.99, 1.10, '100g'),
+               P('no_frills', 'Lactantia Salted Butter 454 g', 7.99, 1.76, '100g'),
+               P('no_frills', 'Maple Leaf Shaved Deli Chicken Breast 375 g', 15, 4, '100g'),
+               P('no_frills', 'Fresh Chicken Breasts 800 g', 10, 1.25, '100g'),
+               P('no_frills', 'Kraft Peanut Butter 1 kg', 8, 0.8, '100g')];
+    const { ctx } = await boot(serve(d));
+    assert.deepStrictEqual(ctx.searchProducts('butter').map(p => p.name), ['Lactantia Salted Butter 454 g']);
+    assert.deepStrictEqual(ctx.searchProducts('chicken breast').map(p => p.name), ['Fresh Chicken Breasts 800 g']);
+    assert.strictEqual(ctx.searchProducts('butter -margarine').length, 2, 'explicit exclusions replace the defaults');
+  });
+
   await test('no match anywhere -> empty result, no throw', async () => {
     const { ctx } = await boot(serve(dataset()));
     assert.strictEqual(Object.keys(ctx.cheapestPerStore('caviar')).length, 0);
