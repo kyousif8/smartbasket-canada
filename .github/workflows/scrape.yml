@@ -1,0 +1,79 @@
+# Smart Basket Canada - weekly scrape + merge + publish
+#
+# IMPORTANT: GitHub only reads workflows from .github/workflows/*.yml.
+# In your new repo use "Add file > Create new file", type this name exactly:
+#     .github/workflows/scrape.yml
+# (typing the slashes creates the folders), then paste this file's contents.
+
+name: Weekly price scrape
+
+on:
+  schedule:
+    - cron: "17 9 * * 1"        # Mondays 09:17 UTC (about 5am Toronto)
+  workflow_dispatch: {}          # manual "Run workflow" button
+
+permissions:
+  contents: write                # needed to push the updated JSON back
+
+concurrency:
+  group: price-scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Offline parser tests (fail fast if a parser is broken)
+        run: python -m unittest test_parsers -v
+
+      - name: Scrape Loblaw banners (No Frills, Superstore, Loblaws)
+        timeout-minutes: 70
+        continue-on-error: true
+        run: python loblaw_scraper.py
+
+      - name: Scrape Walmart Canada
+        timeout-minutes: 20
+        continue-on-error: true
+        run: python walmart_scraper.py
+
+      - name: Scrape Metro / Food Basics (unverified scaffold)
+        timeout-minutes: 25
+        continue-on-error: true
+        env:
+          ENABLE_UNVERIFIED: "1"
+        run: python metro_scraper.py
+
+      - name: Scrape Sobeys / FreshCo / Safeway (unverified scaffold)
+        timeout-minutes: 10
+        continue-on-error: true
+        env:
+          ENABLE_UNVERIFIED: "1"
+        run: python sobeys_scraper.py
+
+      - name: Merge datasets
+        run: python merge_datasets.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "smart-basket-bot"
+          git config user.email "smart-basket-bot@users.noreply.github.com"
+          git add *.json
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "Update prices $(date -u +%F)"
+            git push
+          fi
