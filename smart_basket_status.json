@@ -1,0 +1,64 @@
+{
+  "generated_at": "2026-10-11T11:30:02.068079+00:00",
+  "region": "Greater Toronto Area (prices depend on the store each site assigns)",
+  "stores": {
+    "no_frills": {
+      "count": 1005,
+      "newest": "2026-10-11T11:04:09.098075+00:00",
+      "carried_over": false
+    },
+    "real_canadian_superstore": {
+      "count": 1010,
+      "newest": "2026-10-11T11:15:06.333826+00:00",
+      "carried_over": false
+    },
+    "loblaws": {
+      "count": 1009,
+      "newest": "2026-10-11T11:25:36.208700+00:00",
+      "carried_over": false
+    }
+  },
+  "scrapers": {
+    "loblaw": {
+      "scraper": "loblaw",
+      "finished_at": "2026-10-11T11:25:40.700204+00:00",
+      "products": 3456,
+      "per_store": {
+        "no_frills": 1152,
+        "real_canadian_superstore": 1152,
+        "loblaws": 1152
+      },
+      "blocked": false,
+      "errors": [],
+      "note": ""
+    },
+    "metro": {
+      "scraper": "metro",
+      "finished_at": "2026-10-11T11:30:01.778992+00:00",
+      "products": 0,
+      "per_store": {},
+      "blocked": false,
+      "errors": [],
+      "note": "unverified scaffold; no_products"
+    },
+    "sobeys": {
+      "scraper": "sobeys",
+      "finished_at": "2026-10-11T11:30:01.946762+00:00",
+      "products": 0,
+      "per_store": {},
+      "blocked": false,
+      "errors": [],
+      "note": "unverified scaffold; no search URLs configured"
+    },
+    "walmart": {
+      "scraper": "walmart",
+      "finished_at": "2026-10-11T11:30:00.890170+00:00",
+      "products": 0,
+      "per_store": {},
+      "blocked": false,
+      "errors": [],
+      "note": ""
+    }
+  },
+  "blocked_scrapers": []
+}
