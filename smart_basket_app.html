@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Basket GTA</title>
+<style>
+  :root { --bg:#f6f7f4; --card:#fff; --ink:#1d2a22; --muted:#667267; --line:#e2e6df;
+          --green:#1f7a4d; --green-soft:#e4f3ea; --red:#b3402e; --amber:#a76a00; --amber-soft:#fff3d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141a16; --card:#1d2620; --ink:#e8efe9; --muted:#9aa89d; --line:#2c382f;
+            --green:#58c28a; --green-soft:#1c3427; --red:#ef8a78; --amber:#e6b04d; --amber-soft:#3a2f14; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:960px; margin:0 auto; padding:20px 16px 60px; }
+  h1 { margin:0 0 4px; font-size:26px; }
+  .sub { color:var(--muted); margin:0 0 14px; }
+  .status { font-size:13px; color:var(--muted); padding:8px 12px; background:var(--card);
+            border:1px solid var(--line); border-radius:10px; margin-bottom:14px; }
+  .status.warn { background:var(--amber-soft); color:var(--amber); border-color:transparent; }
+  .row { display:flex; gap:8px; }
+  input[type=search] { flex:1; padding:12px 14px; font-size:16px; border:1px solid var(--line);
+         border-radius:10px; background:var(--card); color:var(--ink); }
+  button { cursor:pointer; border:0; border-radius:10px; padding:10px 16px; font-size:15px;
+           background:var(--green); color:#fff; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 18px; }
+  .chip { padding:6px 12px; border-radius:999px; background:var(--card); color:var(--ink);
+          border:1px solid var(--line); font-size:14px; }
+  .basket-items { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 16px; }
+  .tag { background:var(--green-soft); color:var(--green); padding:5px 8px 5px 12px; border-radius:999px;
+         font-size:14px; display:inline-flex; gap:6px; align-items:center; }
+  .tag span { cursor:pointer; opacity:.7; }
+  #savingsBanner { display:none; align-items:center; gap:10px; background:var(--green-soft); color:var(--green);
+         padding:12px 16px; border-radius:12px; margin-bottom:16px; font-weight:600; }
+  .receipts { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+  .receipt { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; position:relative; }
+  .receipt.best { border:2px solid var(--green); }
+  .receipt h3 { margin:0 0 8px; font-size:17px; }
+  .stamp { position:absolute; top:10px; right:10px; background:var(--green); color:#fff; font-size:11px;
+           font-weight:700; letter-spacing:.06em; padding:3px 8px; border-radius:6px; }
+  .line { display:flex; justify-content:space-between; gap:10px; font-size:14px; padding:6px 0;
+          border-top:1px dashed var(--line); }
+  .line small { display:block; color:var(--muted); }
+  .line a { color:inherit; }
+  .missing { color:var(--red); font-style:italic; }
+  .total { display:flex; justify-content:space-between; font-weight:700; border-top:2px solid var(--line);
+           margin-top:6px; padding-top:8px; }
+  .note { color:var(--amber); font-size:12px; }
+  .empty { color:var(--muted); padding:30px 0; text-align:center; }
+  footer { margin-top:30px; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Smart Basket GTA</h1>
+  <p class="sub">Add everyday groceries and see which Greater Toronto Area store has the cheapest basket.</p>
+  <div class="status" id="dataStatusHint">Loading prices&hellip;</div>
+
+  <div class="row">
+    <input type="search" id="searchInput" placeholder="Add an item, e.g. butter, eggs, rice" aria-label="Add an item">
+    <button id="addBtn" type="button">Add</button>
+    <button id="clearBtn" class="ghost" type="button">Clear</button>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="basket-items" id="basketItems"></div>
+  <div id="savingsBanner"></div>
+  <div class="receipts" id="receipts"></div>
+
+  <footer>
+    Prices are scraped from public retailer web pages, may be out of date, and can differ by store
+    location and in-store. Sale and multi-buy deals are shown separately; totals use the regular
+    single-item price. Not affiliated with or endorsed by any retailer; store names belong to their owners.
+    Always confirm the price at checkout.
+  </footer>
+</div>
+
+<script>
+const STORE_LABELS = {
+  no_frills: 'No Frills',
+  real_canadian_superstore: 'Real Canadian Superstore',
+  loblaws: 'Loblaws',
+  walmart_canada: 'Walmart Canada',
+  metro: 'Metro',
+  food_basics: 'Food Basics',
+  freshco: 'FreshCo',
+  sobeys: 'Sobeys',
+  safeway: 'Safeway'
+};
+const QUICK_ITEMS = ['milk','eggs','butter','bread','rice','chicken','bananas','coffee','cheese','yogurt'];
+const STALE_DAYS = 10;
+
+// Illustrative snapshot of real prices seen on the sites (used only if live data fails to load).
+const SAMPLE_PRODUCTS = [
+  { store:'no_frills', name:'Lactantia Salted Butter 454 g', price_cad:7.99, unit_price:1.76, unit_basis:'100g', url:'https://www.nofrills.ca/en/salted-butter/p/20639926_EA' },
+  { store:'no_frills', name:'No Name Unsalted Butter 454 g', price_cad:6.00, unit_price:1.32, unit_basis:'100g', url:'https://www.nofrills.ca' },
+  { store:'no_frills', name:'No Name Large Size Eggs 12 Pack', price_cad:3.93, unit_price:0.33, unit_basis:'ea', url:'https://www.nofrills.ca' },
+  { store:'no_frills', name:'Neilson 2% Milk 4 L', price_cad:6.44, unit_price:0.16, unit_basis:'100ml', url:'https://www.nofrills.ca' },
+  { store:'real_canadian_superstore', name:'Lactantia Salted Butter 454 g', price_cad:5.99, on_sale:true, unit_price:1.32, unit_basis:'100g', url:'https://www.realcanadiansuperstore.ca' },
+  { store:'real_canadian_superstore', name:'No Name Unsalted Butter 454 g', price_cad:5.99, unit_price:1.32, unit_basis:'100g', url:'https://www.realcanadiansuperstore.ca' },
+  { store:'real_canadian_superstore', name:'No Name Large Size Eggs 12 Pack', price_cad:3.93, unit_price:0.33, unit_basis:'ea', url:'https://www.realcanadiansuperstore.ca' },
+  { store:'walmart_canada', name:'Philadelphia Cream Cheese', price_cad:3.97, regular_price:4.48, on_sale:true, unit_price:1.75, unit_basis:'100g', url:'https://www.walmart.ca' },
+  { store:'walmart_canada', name:'Your Fresh Market Cheese Bagels', price_cad:2.47, unit_price:0.55, unit_basis:'100g', url:'https://www.walmart.ca' },
+  { store:'walmart_canada', name:'Oikos Greek Yogurt', price_cad:6.46, url:'https://www.walmart.ca' },
+  { store:'walmart_canada', name:'Armstrong Cheddar Cheese', price_cad:7.96, url:'https://www.walmart.ca' },
+  { store:'walmart_canada', name:'Nutella Hazelnut Spread 725 g', price_cad:8.47, unit_price:1.17, unit_basis:'100g', url:'https://www.walmart.ca' }
+].map(p => Object.assign({ scraped_at: '2026-10-11T00:00:00Z', sample: true }, p));
+
+let DATASET = SAMPLE_PRODUCTS;
+let STATUS = null;
+let basket = [];
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function money(n) { return '$' + Number(n).toFixed(2); }
+function storeLabel(key) {
+  return STORE_LABELS[key] || String(key).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : '#'; }
+
+function searchProducts(term) {
+  const t = String(term || '').trim().toLowerCase();
+  if (!t) return [];
+  return DATASET.filter(p => String(p.name).toLowerCase().includes(t));
+}
+
+// Cheapest match per store. Ranks by unit price when the matches share a unit basis
+// (so a tiny pack doesn't "win" on sticker price); otherwise falls back to price.
+function cheapestPerStore(term) {
+  const matches = searchProducts(term);
+  const counts = {};
+  matches.forEach(p => { if (p.unit_price != null && p.unit_basis) counts[p.unit_basis] = (counts[p.unit_basis] || 0) + 1; });
+  const basis = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  const rank = p => (basis && p.unit_basis === basis && p.unit_price != null) ? p.unit_price : Infinity;
+  const best = {};
+  matches.forEach(p => {
+    const cur = best[p.store];
+    if (!cur) { best[p.store] = p; return; }
+    const a = rank(p), b = rank(cur);
+    if (a < b || (a === b && p.price_cad < cur.price_cad)) best[p.store] = p;
+  });
+  return best;
+}
+
+function saveBasket() {
+  try { localStorage.setItem('sbBasket', JSON.stringify(basket)); } catch (e) {}
+}
+function addToBasket(term) {
+  term = String(term || '').trim().toLowerCase();
+  if (!term || basket.includes(term)) return;
+  basket.push(term);
+  saveBasket();
+}
+function removeFromBasket(term) {
+  basket = basket.filter(t => t !== term);
+  saveBasket();
+  render();
+}
+
+function storesInData() {
+  const s = [];
+  DATASET.forEach(p => { if (!s.includes(p.store)) s.push(p.store); });
+  return s;
+}
+
+function computeReceipts() {
+  const stores = storesInData();
+  return stores.map(store => {
+    let total = 0, found = 0;
+    const lines = basket.map(term => {
+      const hit = cheapestPerStore(term)[store];
+      if (hit) { total += hit.price_cad; found++; }
+      return { term, hit };
+    });
+    return { store, lines, total, complete: basket.length > 0 && found === basket.length, found };
+  });
+}
+
+function render() {
+  const basketEl = document.getElementById('basketItems');
+  basketEl.innerHTML = basket.map(t =>
+    '<span class="tag">' + esc(t) + ' <span data-term="' + esc(t) + '" title="Remove">&times;</span></span>').join('');
+  basketEl.querySelectorAll && basketEl.querySelectorAll('span[data-term]').forEach(el => {
+    el.onclick = () => removeFromBasket(el.getAttribute('data-term'));
+  });
+
+  const receiptsEl = document.getElementById('receipts');
+  const banner = document.getElementById('savingsBanner');
+  banner.style.display = 'none';
+  if (!basket.length) {
+    receiptsEl.innerHTML = '<div class="empty">Add a few items above to compare stores.</div>';
+    return;
+  }
+
+  const receipts = computeReceipts();
+  const complete = receipts.filter(r => r.complete).sort((a, b) => a.total - b.total);
+  const bestStore = complete.length >= 2 ? complete[0].store : null;
+
+  receiptsEl.innerHTML = receipts
+    .sort((a, b) => (b.complete - a.complete) || (a.total - b.total))
+    .map(r => {
+      const lines = r.lines.map(l => {
+        if (!l.hit) return '<div class="line"><span>' + esc(l.term) + '</span><span class="missing">not found</span></div>';
+        const h = l.hit;
+        const deal = (h.deal_price && h.deal_min_qty) ? '<small>Deal: ' + money(h.deal_price) + ' each when you buy ' + esc(h.deal_min_qty) + '</small>' : '';
+        const sale = (h.on_sale && h.regular_price) ? '<small>On sale (was ' + money(h.regular_price) + ')</small>' : (h.on_sale ? '<small>On sale</small>' : '');
+        const unit = (h.unit_price != null) ? '<small>' + money(h.unit_price) + ' / ' + (h.unit_basis === 'ea' ? 'each' : h.unit_basis.replace('100', '100 ')) + '</small>' : '';
+        const avg = h.price_is_avg ? '<small>average price (sold by weight)</small>' : '';
+        return '<div class="line"><span><a href="' + esc(safeUrl(h.url)) + '" target="_blank" rel="noopener">' + esc(h.name) + '</a>' + unit + sale + deal + avg + '</span><span>' + money(h.price_cad) + '</span></div>';
+      }).join('');
+      const note = r.complete ? '' : '<div class="note">Incomplete basket (' + r.found + '/' + basket.length + ' items) - total not comparable</div>';
+      const carried = DATASET.some(p => p.store === r.store && p.carried_over) ? '<div class="note">Showing earlier prices for this store (latest scrape unavailable)</div>' : '';
+      return '<div class="receipt' + (r.store === bestStore ? ' best' : '') + '">' +
+        (r.store === bestStore ? '<div class="stamp">BEST</div>' : '') +
+        '<h3>' + esc(storeLabel(r.store)) + '</h3>' + lines + note + carried +
+        '<div class="total"><span>Total</span><span>' + money(r.total) + '</span></div></div>';
+    }).join('');
+
+  if (complete.length >= 2) {
+    const lo = complete[0], hi = complete[complete.length - 1];
+    const save = hi.total - lo.total;
+    if (save > 0.004) {
+      banner.style.display = 'flex';
+      banner.innerHTML = 'Shop at ' + esc(storeLabel(lo.store)) + ' and save ' + money(save) +
+        ' (' + Math.round(save / hi.total * 100) + '%) vs ' + esc(storeLabel(hi.store));
+    }
+  }
+}
+
+function describeStatus(live) {
+  const hint = document.getElementById('dataStatusHint');
+  if (!live) {
+    hint.innerHTML = 'Showing a small sample snapshot (not live) - live prices could not be loaded.';
+    hint.className = 'status warn';
+    return;
+  }
+  let newest = 0;
+  DATASET.forEach(p => { const t = Date.parse(p.scraped_at); if (t > newest) newest = t; });
+  const days = newest ? Math.floor((Date.now() - newest) / 86400000) : null;
+  let msg = 'Live data: ' + DATASET.length + ' products from ' + storesInData().length + ' stores';
+  if (newest) msg += ', updated ' + new Date(newest).toISOString().slice(0, 10);
+  msg += '. Prices vary by store location.';
+  let warn = false;
+  if (days != null && days > STALE_DAYS) { msg += ' Data is ' + days + ' days old.'; warn = true; }
+  if (STATUS && STATUS.blocked_scrapers && STATUS.blocked_scrapers.length) {
+    msg += ' Some stores were unavailable in the latest update.'; warn = true;
+  }
+  hint.innerHTML = esc(msg);
+  hint.className = 'status' + (warn ? ' warn' : '');
+}
+
+async function loadDataset() {
+  try {
+    const res = await fetch('smart_basket_dataset.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP error');
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) throw new Error('empty dataset');
+    DATASET = data;
+    try {
+      const sres = await fetch('smart_basket_status.json', { cache: 'no-store' });
+      if (sres && sres.ok) STATUS = await sres.json();
+    } catch (e) { STATUS = null; }
+    describeStatus(true);
+  } catch (e) {
+    DATASET = SAMPLE_PRODUCTS;
+    describeStatus(false);
+  }
+  render();
+}
+
+function init() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('sbBasket') || '[]');
+    if (Array.isArray(saved)) basket = saved.filter(x => typeof x === 'string');
+  } catch (e) {}
+  const chips = document.getElementById('chips');
+  QUICK_ITEMS.forEach(t => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = '+ ' + t; b.type = 'button';
+    b.onclick = () => { addToBasket(t); render(); };
+    chips.appendChild(b);
+  });
+  const input = document.getElementById('searchInput');
+  const add = () => { addToBasket(input.value); input.value = ''; render(); };
+  document.getElementById('addBtn').onclick = add;
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+  document.getElementById('clearBtn').onclick = () => { basket = []; saveBasket(); render(); };
+  render();
+  loadDataset();
+}
+init();
+</script>
+</body>
+</html>
