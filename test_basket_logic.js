@@ -129,6 +129,30 @@ async function test(name, fn) {
     assert.deepStrictEqual(ctx.searchProducts('rice').map(p => p.name), ['Basmati Rice 2 kg']);
   });
 
+  await test('fair size comparison: a 30-egg tray is not compared against another store\'s dozen', async () => {
+    const d = [P('no_frills', 'No Name Large Eggs 12 ea', 3.93, 0.33, 'ea'),
+               P('no_frills', 'Burnbrae Eggs 30 ea', 9.18, 0.31, 'ea'),
+               P('real_canadian_superstore', 'No Name Eggs, Medium 30 ea', 9.18, 0.31, 'ea'),
+               P('real_canadian_superstore', 'No Name Large Eggs 12 ea', 3.99, 0.33, 'ea'),
+               P('walmart_canada', 'Great Value Large Eggs 12 ea', 3.77, 0.31, 'ea')];
+    const { ctx } = await boot(serve(d));
+    const best = ctx.cheapestPerStore('eggs');
+    assert.strictEqual(best.no_frills.price_cad, 3.93);
+    assert.strictEqual(best.real_canadian_superstore.price_cad, 3.99);
+    assert.strictEqual(best.walmart_canada.price_cad, 3.77);
+  });
+
+  await test('size parsing handles g, kg, l, multipacks and each', async () => {
+    const { ctx } = await boot(serve(dataset()));
+    const eq = (n, q, fam) => { const s = ctx.sizeOf(n); assert.ok(s, n); assert.strictEqual(s.q, q, n); assert.strictEqual(s.fam, fam, n); };
+    eq('Lactantia Salted Butter 454 g', 454, 'g');
+    eq('Suraj Basmati Rice 3.63 kg', 3630, 'g');
+    eq('Neilson 2% Milk 4 l', 4000, 'ml');
+    eq('Coca-Cola 12 x 355 mL', 4260, 'ml');
+    eq('No Name Eggs 12 ea', 12, 'ea');
+    assert.strictEqual(ctx.sizeOf('Mystery Item'), null);
+  });
+
   await test('no match anywhere -> empty result, no throw', async () => {
     const { ctx } = await boot(serve(dataset()));
     assert.strictEqual(Object.keys(ctx.cheapestPerStore('caviar')).length, 0);

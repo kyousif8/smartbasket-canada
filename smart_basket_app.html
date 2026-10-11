@@ -159,20 +159,58 @@ function searchProducts(term) {
   });
 }
 
-// Cheapest match per store. Ranks by unit price when the matches share a unit basis
-// (so a tiny pack doesn't "win" on sticker price); otherwise falls back to price.
+// Size in grams / ml / each parsed from a product name ("454 g", "4 l", "12 x 355 ml", "12 ea").
+function sizeOf(name) {
+  const n = String(name || '').toLowerCase();
+  let m = n.match(/(\d+)\s*[x\u00d7]\s*(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b/);
+  if (m) { const q = Number(m[1]) * Number(m[2]); return m[3] === 'kg' || m[3] === 'l' ? { q: q * 1000, fam: m[3] === 'kg' ? 'g' : 'ml' } : { q, fam: m[3] }; }
+  const all = [...n.matchAll(/(\d+(?:\.\d+)?)\s*(kg|g|ml|l|ea)\b/g)];
+  if (!all.length) return null;
+  const last = all[all.length - 1], q = Number(last[1]), u = last[2];
+  if (u === 'kg') return { q: q * 1000, fam: 'g' };
+  if (u === 'l') return { q: q * 1000, fam: 'ml' };
+  return { q, fam: u };
+}
+const BASIS_FAMILY = { '100g': 'g', '100ml': 'ml', 'ea': 'ea' };
+const SIZE_BAND = 1.8;   // accept sizes within 1.8x either side of the typical size
+
+function cheapestOf(list, rank) {
+  let best = null;
+  list.forEach(p => {
+    if (!best) { best = p; return; }
+    const a = rank(p), b = rank(best);
+    if (a < b || (a === b && p.price_cad < best.price_cad)) best = p;
+  });
+  return best;
+}
+
+// Cheapest match per store, compared fairly: find the typical pack size for this search
+// across all stores (median), then at each store take the lowest unit price among packs of
+// a similar size, so one store's 30-egg tray isn't compared with another's dozen.
+// Falls back to unit price (shared basis) and then plain price when sizes are unknown.
 function cheapestPerStore(term) {
   const matches = searchProducts(term);
   const counts = {};
   matches.forEach(p => { if (p.unit_price != null && p.unit_basis) counts[p.unit_basis] = (counts[p.unit_basis] || 0) + 1; });
   const basis = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  const fam = BASIS_FAMILY[basis];
   const rank = p => (basis && p.unit_basis === basis && p.unit_price != null) ? p.unit_price : Infinity;
+
+  const sized = matches.map(p => ({ p, s: sizeOf(p.name) })).filter(x => x.s && x.s.fam === fam && rank(x.p) !== Infinity);
+  let target = null;
+  if (sized.length) {
+    const qs = sized.map(x => x.s.q).sort((a, b) => a - b);
+    target = qs[Math.floor((qs.length - 1) / 2)];
+  }
+  const inBand = new Set(sized.filter(x => x.s.q >= target / SIZE_BAND && x.s.q <= target * SIZE_BAND).map(x => x.p));
+
+  const byStore = {};
+  matches.forEach(p => { (byStore[p.store] = byStore[p.store] || []).push(p); });
   const best = {};
-  matches.forEach(p => {
-    const cur = best[p.store];
-    if (!cur) { best[p.store] = p; return; }
-    const a = rank(p), b = rank(cur);
-    if (a < b || (a === b && p.price_cad < cur.price_cad)) best[p.store] = p;
+  Object.keys(byStore).forEach(store => {
+    const all = byStore[store];
+    const near = all.filter(p => inBand.has(p));
+    best[store] = cheapestOf(near.length ? near : all, rank);
   });
   return best;
 }
