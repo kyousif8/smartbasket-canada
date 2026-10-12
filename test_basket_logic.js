@@ -228,6 +228,97 @@ async function test(name, fn) {
     assert.ok(els.dataStatusHint.innerHTML.includes('unavailable'));
   });
 
+  // ---- Delivery economics -------------------------------------------------------------
+  const near = (a, b, eps) => Math.abs(a - b) < (eps || 0.01);
+
+  await test('quantities multiply line totals and store totals', async () => {
+    const d = [P('no_frills', 'Basmati Rice 2 kg', 10, 0.5, '100g'), P('metro', 'Basmati Rice 2 kg', 13, 0.65, '100g')];
+    const { ctx, els } = await boot(serve(d));
+    ctx.addToBasket('rice'); ctx.setQty('rice', 3);
+    const h = els.receipts.innerHTML;
+    assert.ok(h.includes('3 &times; $10.00'), h);
+    assert.ok(h.includes('$30.00'), h);
+    assert.ok(h.includes('$39.00'), h);
+    assert.strictEqual(ctx.getQty('rice'), 3);
+    ctx.setQty('rice', 0);                       // never below 1
+    assert.strictEqual(ctx.getQty('rice'), 1);
+  });
+
+  await test('deliveryEconomics: fee, net saving and break-even basket are computed correctly', async () => {
+    const { ctx } = await boot(serve(dataset()));
+    const e = ctx.deliveryEconomics(300, 369);                // 23% saving per $ of groceries
+    assert.ok(near(e.saving, 69));
+    assert.ok(near(e.fee, 24.99 + 0.08 * 300));
+    assert.ok(near(e.feeTax, (24.99 + 24) * 1.13));
+    assert.ok(near(e.net, 69 - (24.99 + 24) * 1.13));
+    assert.strictEqual(e.minOrder, 240);                      // ceil to $5 of (24.99*1.13+5)/(0.23-0.08*1.13)
+    assert.strictEqual(e.ok, true);
+  });
+
+  await test('deliveryEconomics: below the break-even basket delivery is refused and the gap is shown', async () => {
+    const { ctx } = await boot(serve(dataset()));
+    const e = ctx.deliveryEconomics(150, 184.5);              // same 23% rate, smaller basket
+    assert.strictEqual(e.ok, false);
+    assert.strictEqual(e.minOrder, 240);
+    assert.strictEqual(e.gap, 90);
+    assert.ok(e.net < 5);
+  });
+
+  await test('deliveryEconomics: savings too small to ever cover the percentage fee -> never worthwhile', async () => {
+    const { ctx } = await boot(serve(dataset()));
+    const e = ctx.deliveryEconomics(1000, 1050);              // 5% saving < 8% fee + HST
+    assert.strictEqual(e.minOrder, null);
+    assert.strictEqual(e.ok, false);
+  });
+
+  await test('deliveryEconomics: the minimum order floor applies even when savings are huge', async () => {
+    const { ctx } = await boot(serve(dataset()));
+    const e = ctx.deliveryEconomics(100, 200);
+    assert.strictEqual(e.minOrder, 200);
+    assert.strictEqual(e.ok, false);                          // 100 < floor
+    assert.strictEqual(ctx.deliveryEconomics(200, 400).ok, true);
+  });
+
+  await test('when it is worth it, break-even guarantee holds: customer keeps at least the minimum net saving', async () => {
+    const { ctx } = await boot(serve(dataset()));
+    for (const [ours, base] of [[240, 295], [400, 480], [260, 330], [999, 1300]]) {
+      const e = ctx.deliveryEconomics(ours, base);
+      if (e.ok) assert.ok(e.net >= 5 - 1e-6, ours + ' -> net ' + e.net);
+    }
+  });
+
+  await test('delivery card: average baseline says not worth it, picking the pricier usual store flips it', async () => {
+    const d = [P('no_frills', 'Basmati Rice 2 kg', 10, 0.5, '100g'), P('metro', 'Basmati Rice 2 kg', 13, 0.65, '100g')];
+    const { ctx, els } = await boot(serve(d));
+    ctx.addToBasket('rice'); ctx.setQty('rice', 25);          // $250 at No Frills, $325 at Metro
+    let h = els.delivery.innerHTML;
+    assert.ok(h.includes('Not worth it yet'), h);             // avg baseline $287.50 -> 15% saving
+    assert.ok(h.includes('average of these stores'));
+    require('vm').runInContext("usual = 'metro'", ctx); ctx.render();
+    h = els.delivery.innerHTML;
+    assert.ok(h.includes('Delivery is worth it'), h);
+    assert.ok(h.includes('Delivery launching soon'), 'no contact link configured yet -> disabled button');
+    assert.ok(!h.includes('Request delivery'));
+  });
+
+  await test('delivery card: contact link switches ordering on; empty basket or one store hides the card', async () => {
+    const d = [P('no_frills', 'Basmati Rice 2 kg', 10, 0.5, '100g'), P('metro', 'Basmati Rice 2 kg', 13, 0.65, '100g'),
+               P('no_frills', 'Eggs 12 ea', 3, 0.25, 'ea')];
+    const { ctx, els } = await boot(serve(d));
+    assert.strictEqual(els.delivery.style.display, 'none');   // empty basket
+    ctx.addToBasket('eggs'); ctx.render();                    // eggs only at one store -> no complete pair
+    assert.strictEqual(els.delivery.style.display, 'none');
+    ctx.addToBasket('rice'); ctx.render();                    // eggs incomplete at Metro
+    assert.strictEqual(els.delivery.style.display, 'none');
+    ctx.removeFromBasket('eggs');
+    ctx.setQty('rice', 25);
+    require('vm').runInContext("usual = 'metro'; DELIVERY.contactUrl = 'https://wa.me/10000000000'", ctx); ctx.render();
+    assert.ok(els.delivery.innerHTML.includes('Request delivery'));
+    assert.ok(els.delivery.innerHTML.includes('https://wa.me/10000000000'));
+    require('vm').runInContext("DELIVERY.contactUrl = 'javascript:alert(1)'", ctx); ctx.render();
+    assert.ok(!els.delivery.innerHTML.includes('javascript:'), 'unsafe link must be neutralised');
+  });
+
   console.log('\n' + (run - failed) + '/' + run + ' passed');
   if (failed) process.exit(1);
 })();

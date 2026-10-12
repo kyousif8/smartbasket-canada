@@ -20,7 +20,7 @@ GitHub Actions run is the real test. Expect to tune selectors after reading its 
 - `staples.py` search terms; `loblaw_scraper.py`, `walmart_scraper.py`, `metro_scraper.py`, `sobeys_scraper.py`
 - `merge_datasets.py` -> `smart_basket_dataset.json` + `smart_basket_status.json`
 - `smart_basket_app.html` the app
-- `test_parsers.py` (17 Python tests), `test_basket_logic.js` (13 app tests)
+- `test_parsers.py` (Python tests), `test_basket_logic.js` (26 app tests)
 - `github_workflows_scrape.yml` -> must be saved as `.github/workflows/scrape.yml`
 - `LEGAL_AND_MONETIZATION.md` read before charging money or promoting this
 
@@ -36,3 +36,8 @@ GitHub Actions run is the real test. Expect to tune selectors after reading its 
 ## Run tests locally (no network needed)
     python -m unittest test_parsers -v
     node test_basket_logic.js
+
+## Delivery card (minimum order)
+The app compares the cheapest store against where the customer usually shops and says whether delivery is worth it.
+Fee and thresholds live in the `DELIVERY` object at the top of the script in `smart_basket_app.html`. Set
+`DELIVERY.contactUrl` (for example a WhatsApp link `https://wa.me/<number>`) to turn the Request delivery button on.

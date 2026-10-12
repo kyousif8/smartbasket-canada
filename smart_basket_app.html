@@ -50,6 +50,23 @@
            margin-top:6px; padding-top:8px; }
   .note { color:var(--amber); font-size:12px; }
   .empty { color:var(--muted); padding:30px 0; text-align:center; }
+  .qty { display:inline-flex; align-items:center; gap:4px; margin:0 2px; }
+  .qty b { min-width:1.2em; text-align:center; font-weight:600; }
+  .qty span { cursor:pointer; padding:0 5px; border-radius:6px; background:var(--card); line-height:1.3; }
+  #delivery { display:none; margin:0 0 18px; }
+  .dcard { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .dcard h2 { margin:0 0 8px; font-size:18px; }
+  .dcard label { font-size:14px; color:var(--muted); }
+  .dcard select { margin-left:6px; padding:6px 8px; border-radius:8px; border:1px solid var(--line);
+                  background:var(--card); color:var(--ink); font-size:14px; }
+  .dline { display:flex; justify-content:space-between; gap:10px; font-size:14px; padding:5px 0; border-top:1px dashed var(--line); }
+  .dverdict { margin-top:10px; padding:10px 12px; border-radius:10px; font-weight:600; font-size:15px; }
+  .dverdict.ok { background:var(--green-soft); color:var(--green); }
+  .dverdict.no { background:var(--amber-soft); color:var(--amber); }
+  .dbtn { display:inline-block; margin-top:10px; padding:10px 16px; border-radius:10px; background:var(--green);
+          color:#fff; text-decoration:none; font-size:15px; }
+  .dbtn.off { background:var(--line); color:var(--muted); cursor:not-allowed; }
+  .dfine { margin-top:8px; font-size:12px; color:var(--muted); }
   footer { margin-top:30px; font-size:12px; color:var(--muted); }
 </style>
 </head>
@@ -67,13 +84,15 @@
   <div class="chips" id="chips"></div>
   <div class="basket-items" id="basketItems"></div>
   <div id="savingsBanner"></div>
+  <div id="delivery"></div>
   <div class="receipts" id="receipts"></div>
 
   <footer>
     Prices are scraped from public retailer web pages, may be out of date, and can differ by store
     location and in-store. Sale and multi-buy deals are shown separately; totals use the regular
     single-item price. Not affiliated with or endorsed by any retailer; store names belong to their owners.
-    Always confirm the price at checkout.
+    Always confirm the price at checkout. Delivery figures are estimates: the final charge would be the
+    actual receipt prices plus the delivery and service fee and HST.
   </footer>
 </div>
 
@@ -111,6 +130,18 @@ const SAMPLE_PRODUCTS = [
 let DATASET = SAMPLE_PRODUCTS;
 let STATUS = null;
 let basket = [];
+let qty = {};            // term -> quantity (default 1)
+let usual = 'avg';       // where the customer normally shops ('avg' = average of the stores compared)
+
+// Delivery pricing. Customer-facing numbers only; the cost model is kept privately by the owner.
+const DELIVERY = {
+  feeFixed: 24.99,        // flat delivery + service fee before HST
+  feePct: 0.08,           // plus this share of the groceries total
+  hst: 0.13,              // Ontario HST charged on the fee
+  minNetSaving: 5,        // customer must keep at least this much after fees
+  minOrderFloor: 200,     // never deliver smaller orders than this
+  contactUrl: ''          // set to a WhatsApp / mailto / form link to switch ordering on
+};
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -218,7 +249,13 @@ function cheapestPerStore(term) {
 }
 
 function saveBasket() {
-  try { localStorage.setItem('sbBasket', JSON.stringify(basket)); } catch (e) {}
+  try { localStorage.setItem('sbBasket', JSON.stringify(basket)); localStorage.setItem('sbQty', JSON.stringify(qty)); } catch (e) {}
+}
+function getQty(term) { const n = Math.floor(Number(qty[term])); return n >= 1 ? Math.min(n, 99) : 1; }
+function setQty(term, n) {
+  qty[term] = Math.max(1, Math.min(99, Math.floor(Number(n)) || 1));
+  saveBasket();
+  render();
 }
 function addToBasket(term) {
   term = String(term || '').trim().toLowerCase();
@@ -228,6 +265,7 @@ function addToBasket(term) {
 }
 function removeFromBasket(term) {
   basket = basket.filter(t => t !== term);
+  delete qty[term];
   saveBasket();
   render();
 }
@@ -244,26 +282,98 @@ function computeReceipts() {
     let total = 0, found = 0;
     const lines = basket.map(term => {
       const hit = cheapestPerStore(term)[store];
-      if (hit) { total += hit.price_cad; found++; }
+      if (hit) { total += hit.price_cad * getQty(term); found++; }
       return { term, hit };
     });
     return { store, lines, total, complete: basket.length > 0 && found === basket.length, found };
   });
 }
 
+// ---- Delivery economics -------------------------------------------------------------
+// Delivery is only worth it when the savings versus the customer's usual store beat the fee.
+// 'ours' = groceries total at the cheapest complete store, 'baseline' = same basket at the usual store.
+function deliveryFee(orderValue) { return DELIVERY.feeFixed + DELIVERY.feePct * orderValue; }   // before HST
+
+function deliveryEconomics(ours, baseline) {
+  const t = 1 + DELIVERY.hst;
+  const saving = baseline - ours;
+  const fee = deliveryFee(ours), feeTax = fee * t;
+  const net = saving - feeTax;
+  const k = ours > 0 ? saving / ours : 0;                  // saving per $1 of groceries bought
+  const denom = k - DELIVERY.feePct * t;
+  const breakEven = denom > 0 ? (DELIVERY.feeFixed * t + DELIVERY.minNetSaving) / denom : null;
+  const minOrder = breakEven == null ? null : Math.max(DELIVERY.minOrderFloor, Math.ceil(breakEven / 5) * 5);
+  const ok = minOrder != null && ours >= minOrder && net >= DELIVERY.minNetSaving - 1e-9;
+  return { saving, rate: baseline > 0 ? saving / baseline : 0, fee, feeTax, net, k,
+           breakEven, minOrder, ok, gap: minOrder == null ? null : Math.max(0, minOrder - ours) };
+}
+
+function renderDelivery(receipts) {
+  const el = document.getElementById('delivery');
+  el.style.display = 'none';
+  const complete = receipts.filter(r => r.complete).sort((a, b) => a.total - b.total);
+  if (!basket.length || complete.length < 2) { el.innerHTML = ''; return; }
+  const best = complete[0];
+  let baseKey = usual, baseTotal;
+  const chosen = complete.find(r => r.store === usual);
+  if (usual !== 'avg' && chosen) baseTotal = chosen.total;
+  else { baseKey = 'avg'; baseTotal = complete.reduce((a, r) => a + r.total, 0) / complete.length; }
+
+  const e = deliveryEconomics(best.total, baseTotal);
+  const opts = ['<option value="avg"' + (baseKey === 'avg' ? ' selected' : '') + '>average of these stores</option>']
+    .concat(complete.map(r => '<option value="' + esc(r.store) + '"' + (baseKey === r.store ? ' selected' : '') + '>' + esc(storeLabel(r.store)) + '</option>')).join('');
+  const baseLabel = baseKey === 'avg' ? 'the average store' : storeLabel(baseKey);
+
+  let verdict, cls;
+  if (e.ok) {
+    cls = 'ok';
+    verdict = 'Delivery is worth it: you would still keep ' + money(e.net) + ' after the delivery fee.';
+  } else if (e.minOrder == null) {
+    cls = 'no';
+    verdict = 'Not worth it for this basket: the saving versus ' + baseLabel + ' is too small to cover delivery. Shop at ' + storeLabel(best.store) + ' yourself.';
+  } else {
+    cls = 'no';
+    verdict = 'Not worth it yet. At this savings rate delivery pays off from about ' + money(e.minOrder) +
+      ' of groceries (you are at ' + money(best.total) + '): add about ' + money(e.gap) + ' more.';
+  }
+  let action = '';
+  if (e.ok) {
+    action = DELIVERY.contactUrl
+      ? '<a class="dbtn" href="' + esc(safeUrl(DELIVERY.contactUrl)) + '" target="_blank" rel="noopener">Request delivery</a>'
+      : '<span class="dbtn off">Delivery launching soon</span>';
+  }
+  el.innerHTML = '<div class="dcard"><h2>Is delivery worth it?</h2>' +
+    '<label>I usually shop at <select id="usualStore">' + opts + '</select></label>' +
+    '<div class="dline"><span>Groceries at ' + esc(storeLabel(best.store)) + '</span><span>' + money(best.total) + '</span></div>' +
+    '<div class="dline"><span>Same basket at ' + esc(baseLabel) + '</span><span>' + money(baseTotal) + '</span></div>' +
+    '<div class="dline"><span>You save</span><span>' + money(Math.max(0, e.saving)) + ' (' + Math.round(Math.max(0, e.rate) * 100) + '%)</span></div>' +
+    '<div class="dline"><span>Delivery and service fee (incl. HST)</span><span>' + money(e.feeTax) + '</span></div>' +
+    '<div class="dline"><span><b>You keep after the fee</b></span><span><b>' + (e.net < 0 ? '-' : '') + money(Math.abs(e.net)) + '</b></span></div>' +
+    '<div class="dverdict ' + cls + '">' + esc(verdict) + '</div>' + action +
+    '<div class="dfine">Estimate only. Orders under ' + money(DELIVERY.minOrderFloor) + ' are not delivered. The final charge would be actual receipt prices plus the fee and HST; shelf prices can differ from the scraped ones.</div></div>';
+  el.style.display = 'block';
+  const sel = el.querySelector && el.querySelector('#usualStore');
+  if (sel) sel.onchange = () => { usual = sel.value; try { localStorage.setItem('sbUsual', usual); } catch (x) {} render(); };
+}
+
 function render() {
   const basketEl = document.getElementById('basketItems');
   basketEl.innerHTML = basket.map(t =>
-    '<span class="tag">' + esc(t) + ' <span data-term="' + esc(t) + '" title="Remove">&times;</span></span>').join('');
-  basketEl.querySelectorAll && basketEl.querySelectorAll('span[data-term]').forEach(el => {
-    el.onclick = () => removeFromBasket(el.getAttribute('data-term'));
-  });
+    '<span class="tag">' + esc(t) +
+    ' <span class="qty"><span data-dec="' + esc(t) + '" title="Fewer">&minus;</span><b>' + getQty(t) + '</b><span data-inc="' + esc(t) + '" title="More">+</span></span>' +
+    ' <span data-term="' + esc(t) + '" title="Remove">&times;</span></span>').join('');
+  if (basketEl.querySelectorAll) {
+    basketEl.querySelectorAll('span[data-term]').forEach(el => { el.onclick = () => removeFromBasket(el.getAttribute('data-term')); });
+    basketEl.querySelectorAll('span[data-dec]').forEach(el => { el.onclick = () => setQty(el.getAttribute('data-dec'), getQty(el.getAttribute('data-dec')) - 1); });
+    basketEl.querySelectorAll('span[data-inc]').forEach(el => { el.onclick = () => setQty(el.getAttribute('data-inc'), getQty(el.getAttribute('data-inc')) + 1); });
+  }
 
   const receiptsEl = document.getElementById('receipts');
   const banner = document.getElementById('savingsBanner');
   banner.style.display = 'none';
   if (!basket.length) {
     receiptsEl.innerHTML = '<div class="empty">Add a few items above to compare stores.</div>';
+    renderDelivery([]);
     return;
   }
 
@@ -281,7 +391,9 @@ function render() {
         const sale = (h.on_sale && h.regular_price) ? '<small>On sale (was ' + money(h.regular_price) + ')</small>' : (h.on_sale ? '<small>On sale</small>' : '');
         const unit = (h.unit_price != null) ? '<small>' + money(h.unit_price) + ' / ' + (h.unit_basis === 'ea' ? 'each' : h.unit_basis.replace('100', '100 ')) + '</small>' : '';
         const avg = h.price_is_avg ? '<small>average price (sold by weight)</small>' : '';
-        return '<div class="line"><span><a href="' + esc(safeUrl(h.url)) + '" target="_blank" rel="noopener">' + esc(h.name) + '</a>' + unit + sale + deal + avg + '</span><span>' + money(h.price_cad) + '</span></div>';
+        const q = getQty(l.term);
+        const qtxt = q > 1 ? '<small>' + q + ' &times; ' + money(h.price_cad) + '</small>' : '';
+        return '<div class="line"><span><a href="' + esc(safeUrl(h.url)) + '" target="_blank" rel="noopener">' + esc(h.name) + '</a>' + unit + sale + deal + avg + qtxt + '</span><span>' + money(h.price_cad * q) + '</span></div>';
       }).join('');
       const note = r.complete ? '' : '<div class="note">Incomplete basket (' + r.found + '/' + basket.length + ' items) - total not comparable</div>';
       const carried = DATASET.some(p => p.store === r.store && p.carried_over) ? '<div class="note">Showing earlier prices for this store (latest scrape unavailable)</div>' : '';
@@ -300,6 +412,7 @@ function render() {
         ' (' + Math.round(save / hi.total * 100) + '%) vs ' + esc(storeLabel(hi.store));
     }
   }
+  renderDelivery(receipts);
 }
 
 function describeStatus(live) {
@@ -347,6 +460,10 @@ function init() {
   try {
     const saved = JSON.parse(localStorage.getItem('sbBasket') || '[]');
     if (Array.isArray(saved)) basket = saved.filter(x => typeof x === 'string');
+    const sq = JSON.parse(localStorage.getItem('sbQty') || '{}');
+    if (sq && typeof sq === 'object') basket.forEach(t => { if (sq[t] != null) qty[t] = sq[t]; });
+    const su = localStorage.getItem('sbUsual');
+    if (su) usual = su;
   } catch (e) {}
   const chips = document.getElementById('chips');
   QUICK_ITEMS.forEach(t => {
@@ -359,7 +476,7 @@ function init() {
   const add = () => { addToBasket(input.value); input.value = ''; render(); };
   document.getElementById('addBtn').onclick = add;
   input.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
-  document.getElementById('clearBtn').onclick = () => { basket = []; saveBasket(); render(); };
+  document.getElementById('clearBtn').onclick = () => { basket = []; qty = {}; saveBasket(); render(); };
   render();
   loadDataset();
 }
