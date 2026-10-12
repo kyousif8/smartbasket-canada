@@ -1,31 +1,31 @@
 {
-  "generated_at": "2026-10-11T23:19:32.240342+00:00",
+  "generated_at": "2026-10-12T19:39:40.568293+00:00",
   "region": "Greater Toronto Area (prices depend on the store each site assigns)",
   "stores": {
     "no_frills": {
-      "count": 965,
-      "newest": "2026-10-11T23:00:21.179056+00:00",
+      "count": 973,
+      "newest": "2026-10-12T19:16:55.015009+00:00",
       "carried_over": false
     },
     "real_canadian_superstore": {
-      "count": 996,
-      "newest": "2026-10-11T23:09:30.862422+00:00",
+      "count": 959,
+      "newest": "2026-10-12T19:28:07.160126+00:00",
       "carried_over": false
     },
     "loblaws": {
-      "count": 987,
-      "newest": "2026-10-11T23:19:10.580530+00:00",
+      "count": 976,
+      "newest": "2026-10-12T19:39:18.533991+00:00",
       "carried_over": false
     }
   },
   "scrapers": {
     "loblaw": {
       "scraper": "loblaw",
-      "finished_at": "2026-10-11T23:19:14.852988+00:00",
-      "products": 3456,
+      "finished_at": "2026-10-12T19:39:23.082611+00:00",
+      "products": 3440,
       "per_store": {
         "no_frills": 1152,
-        "real_canadian_superstore": 1152,
+        "real_canadian_superstore": 1136,
         "loblaws": 1152
       },
       "blocked": false,
@@ -34,7 +34,7 @@
     },
     "metro": {
       "scraper": "metro",
-      "finished_at": "2026-10-11T23:19:32.068329+00:00",
+      "finished_at": "2026-10-12T19:39:40.286998+00:00",
       "products": 0,
       "per_store": {},
       "blocked": false,
@@ -43,7 +43,7 @@
     },
     "sobeys": {
       "scraper": "sobeys",
-      "finished_at": "2026-10-11T23:19:32.168018+00:00",
+      "finished_at": "2026-10-12T19:39:40.450107+00:00",
       "products": 0,
       "per_store": {},
       "blocked": false,
@@ -52,7 +52,7 @@
     },
     "walmart": {
       "scraper": "walmart",
-      "finished_at": "2026-10-11T23:19:31.398620+00:00",
+      "finished_at": "2026-10-12T19:39:39.461692+00:00",
       "products": 0,
       "per_store": {},
       "blocked": true,
