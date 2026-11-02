@@ -1,27 +1,47 @@
 {
-  "generated_at": "2026-10-26T16:39:39.334458+00:00",
+  "generated_at": "2026-11-02T20:02:35.946796+00:00",
   "region": "Greater Toronto Area (prices depend on the store each site assigns)",
   "stores": {
     "no_frills": {
-      "count": 990,
-      "newest": "2026-10-26T16:19:30.113969+00:00",
+      "count": 977,
+      "newest": "2026-11-02T19:41:32.370378+00:00",
       "carried_over": false
     },
     "real_canadian_superstore": {
-      "count": 990,
-      "newest": "2026-10-26T16:29:13.565681+00:00",
+      "count": 987,
+      "newest": "2026-11-02T19:51:50.247560+00:00",
       "carried_over": false
     },
     "loblaws": {
-      "count": 983,
-      "newest": "2026-10-26T16:39:17.114329+00:00",
+      "count": 979,
+      "newest": "2026-11-02T20:02:12.685519+00:00",
       "carried_over": false
     }
   },
   "scrapers": {
+    "walmart": {
+      "scraper": "walmart",
+      "finished_at": "2026-11-02T20:02:34.931445+00:00",
+      "products": 0,
+      "per_store": {},
+      "blocked": true,
+      "errors": [
+        "bot-check page; stopped"
+      ],
+      "note": ""
+    },
+    "metro": {
+      "scraper": "metro",
+      "finished_at": "2026-11-02T20:02:35.721485+00:00",
+      "products": 0,
+      "per_store": {},
+      "blocked": false,
+      "errors": [],
+      "note": "unverified scaffold; no_products"
+    },
     "loblaw": {
       "scraper": "loblaw",
-      "finished_at": "2026-10-26T16:39:21.975865+00:00",
+      "finished_at": "2026-11-02T20:02:18.376211+00:00",
       "products": 3456,
       "per_store": {
         "no_frills": 1152,
@@ -32,34 +52,14 @@
       "errors": [],
       "note": ""
     },
-    "metro": {
-      "scraper": "metro",
-      "finished_at": "2026-10-26T16:39:39.153564+00:00",
-      "products": 0,
-      "per_store": {},
-      "blocked": false,
-      "errors": [],
-      "note": "unverified scaffold; no_products"
-    },
     "sobeys": {
       "scraper": "sobeys",
-      "finished_at": "2026-10-26T16:39:39.259135+00:00",
+      "finished_at": "2026-11-02T20:02:35.846836+00:00",
       "products": 0,
       "per_store": {},
       "blocked": false,
       "errors": [],
       "note": "unverified scaffold; no search URLs configured"
-    },
-    "walmart": {
-      "scraper": "walmart",
-      "finished_at": "2026-10-26T16:39:38.536170+00:00",
-      "products": 0,
-      "per_store": {},
-      "blocked": true,
-      "errors": [
-        "bot-check page; stopped"
-      ],
-      "note": ""
     }
   },
   "blocked_scrapers": [
