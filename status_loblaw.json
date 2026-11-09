@@ -1,13 +1,13 @@
 {
   "scraper": "loblaw",
-  "finished_at": "2026-11-02T20:02:18.376211+00:00",
-  "products": 3456,
-  "per_store": {
-    "no_frills": 1152,
-    "real_canadian_superstore": 1152,
-    "loblaws": 1152
-  },
-  "blocked": false,
-  "errors": [],
+  "finished_at": "2026-11-09T19:52:38.524719+00:00",
+  "products": 0,
+  "per_store": {},
+  "blocked": true,
+  "errors": [
+    "no_frills: bot-check page; stopped",
+    "real_canadian_superstore: bot-check page; stopped",
+    "loblaws: bot-check page; stopped"
+  ],
   "note": ""
 }

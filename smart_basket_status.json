@@ -1,27 +1,27 @@
 {
-  "generated_at": "2026-11-02T20:02:35.946796+00:00",
+  "generated_at": "2026-11-09T19:52:55.951930+00:00",
   "region": "Greater Toronto Area (prices depend on the store each site assigns)",
   "stores": {
     "no_frills": {
       "count": 977,
       "newest": "2026-11-02T19:41:32.370378+00:00",
-      "carried_over": false
+      "carried_over": true
     },
     "real_canadian_superstore": {
       "count": 987,
       "newest": "2026-11-02T19:51:50.247560+00:00",
-      "carried_over": false
+      "carried_over": true
     },
     "loblaws": {
       "count": 979,
       "newest": "2026-11-02T20:02:12.685519+00:00",
-      "carried_over": false
+      "carried_over": true
     }
   },
   "scrapers": {
     "walmart": {
       "scraper": "walmart",
-      "finished_at": "2026-11-02T20:02:34.931445+00:00",
+      "finished_at": "2026-11-09T19:52:54.884869+00:00",
       "products": 0,
       "per_store": {},
       "blocked": true,
@@ -32,7 +32,7 @@
     },
     "metro": {
       "scraper": "metro",
-      "finished_at": "2026-11-02T20:02:35.721485+00:00",
+      "finished_at": "2026-11-09T19:52:55.690336+00:00",
       "products": 0,
       "per_store": {},
       "blocked": false,
@@ -41,20 +41,20 @@
     },
     "loblaw": {
       "scraper": "loblaw",
-      "finished_at": "2026-11-02T20:02:18.376211+00:00",
-      "products": 3456,
-      "per_store": {
-        "no_frills": 1152,
-        "real_canadian_superstore": 1152,
-        "loblaws": 1152
-      },
-      "blocked": false,
-      "errors": [],
+      "finished_at": "2026-11-09T19:52:38.524719+00:00",
+      "products": 0,
+      "per_store": {},
+      "blocked": true,
+      "errors": [
+        "no_frills: bot-check page; stopped",
+        "real_canadian_superstore: bot-check page; stopped",
+        "loblaws: bot-check page; stopped"
+      ],
       "note": ""
     },
     "sobeys": {
       "scraper": "sobeys",
-      "finished_at": "2026-11-02T20:02:35.846836+00:00",
+      "finished_at": "2026-11-09T19:52:55.844782+00:00",
       "products": 0,
       "per_store": {},
       "blocked": false,
@@ -63,6 +63,7 @@
     }
   },
   "blocked_scrapers": [
-    "walmart"
+    "walmart",
+    "loblaw"
   ]
 }
